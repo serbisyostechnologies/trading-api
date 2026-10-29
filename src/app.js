@@ -13,9 +13,19 @@ export function createApp({ feed = null, candleStore = null } = {}) {
   app.use(
     cors({
       origin(origin, callback) {
-        if (!origin || config.frontendOrigins.includes(origin)) {
+        const normalize = (value) => value.trim().replace(/\/+$/, "");
+
+        const allowedOrigins = config.frontendOrigins.map(normalize);
+        const requestOrigin = origin ? normalize(origin) : null;
+
+        if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
           return callback(null, true);
         }
+
+        logger.warn("CORS origin rejected", {
+          requestOrigin,
+          allowedOrigins,
+        });
 
         return callback(new Error("Origin not allowed by CORS"));
       },
