@@ -7,6 +7,16 @@ export function createSocketServer(httpServer, feed, candleStore) {
   const io = new Server(httpServer, {
     cors: {
       origin(origin, callback) {
+        const normalize = (value) => value.trim().replace(/\/+$/, "");
+
+        const allowedOrigins = config.frontendOrigins.map(normalize);
+        const requestOrigin = origin ? normalize(origin) : null;
+
+        logger.warn("CORS origin rejected", {
+          requestOrigin,
+          allowedOrigins,
+        });
+
         if (!origin || config.frontendOrigins.includes(origin)) return callback(null, true);
         return callback(new Error("Origin not allowed by CORS"));
       },
