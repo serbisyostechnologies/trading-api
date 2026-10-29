@@ -101,3 +101,7 @@ export function createApp({ feed = null, candleStore = null } = {}) {
 
   return app;
 }
+
+const app = createApp();
+
+export default app;
