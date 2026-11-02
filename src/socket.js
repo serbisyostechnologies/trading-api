@@ -10,7 +10,7 @@ export function createSocketServer(httpServer, feed, candleStore) {
       origin(origin, callback) {
         const normalize = (value) => value.trim().replace(/\/+$/, "");
 
-        const allowedOrigins = config.FRONTEND_ORIGINS.map(normalize);
+        const allowedOrigins = config.FRONTEND_ORIGINS;
         const requestOrigin = origin ? normalize(origin) : null;
 
         if (!origin || allowedOrigins.includes(requestOrigin)) {

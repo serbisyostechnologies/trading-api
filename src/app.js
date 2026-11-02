@@ -15,7 +15,7 @@ export function createApp({ feed = null, candleStore = null } = {}) {
       origin(origin, callback) {
         const normalize = (value) => value.trim().replace(/\/+$/, "");
 
-        const allowedOrigins = config.FRONTEND_ORIGINS.map(normalize);
+        const allowedOrigins = config.FRONTEND_ORIGINS;
         const requestOrigin = origin ? normalize(origin) : null;
 
         if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
