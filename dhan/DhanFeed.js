@@ -5,8 +5,14 @@ import { logger } from "../logger.js";
 import { decodeDhanPacket } from "./decoder.js";
 
 const SEGMENT_CODE = {
-  IDX_I: 0, NSE_EQ: 1, NSE_FNO: 2, NSE_CURRENCY: 3,
-  BSE_EQ: 4, MCX_COMM: 5, BSE_CURRENCY: 7, BSE_FNO: 8,
+  IDX_I: 0,
+  NSE_EQ: 1,
+  NSE_FNO: 2,
+  NSE_CURRENCY: 3,
+  BSE_EQ: 4,
+  MCX_COMM: 5,
+  BSE_CURRENCY: 7,
+  BSE_FNO: 8,
 };
 
 export class DhanFeed extends EventEmitter {
@@ -32,13 +38,31 @@ export class DhanFeed extends EventEmitter {
   }
 
   start() {
+    logger.info("[DHAN FEED] start() invoked");
+
     this.stopped = false;
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      logger.info("[DHAN FEED] Already connected");
+      return;
+    }
+
     this.connect();
   }
 
   connect() {
+    logger.info("[DHAN FEED] connect() invoked", {
+      stopped: this.stopped,
+      connecting: this.connecting,
+      state: this.state,
+      readyState: this.ws?.readyState ?? null,
+    });
     if (this.stopped || this.connecting) return;
-    if (this.ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(this.ws.readyState)) return;
+    if (
+      this.ws &&
+      [WebSocket.OPEN, WebSocket.CONNECTING].includes(this.ws.readyState)
+    )
+      return;
 
     this.connecting = true;
     this.state = "connecting";
@@ -70,24 +94,37 @@ export class DhanFeed extends EventEmitter {
       try {
         if (!isBinary && Buffer.isBuffer(data)) {
           // Non-binary messages may be diagnostic text; never log tokens or raw packets.
-          logger.warn("[DHAN FEED] Received non-binary message", { message: data.toString("utf8").slice(0, 160) });
+          logger.warn("[DHAN FEED] Received non-binary message", {
+            message: data.toString("utf8").slice(0, 160),
+          });
           return;
         }
         const packet = decodeDhanPacket(data);
         if (!packet) return;
         if (packet.type === "disconnect") {
-          logger.warn("[DHAN FEED] Provider disconnect packet", { disconnectCode: packet.disconnectCode });
+          logger.warn("[DHAN FEED] Provider disconnect packet", {
+            disconnectCode: packet.disconnectCode,
+          });
           this.lastError = `Dhan disconnect code ${packet.disconnectCode ?? "unknown"}`;
           this.emit("status", this.status());
           return;
         }
-        const key = packet.exchangeSegment && packet.securityId
-          ? `${packet.exchangeSegment}:${packet.securityId}` : null;
-        const instrument = key ? [...this.desired.values()].find(
-          (item) => `${item.exchangeSegment}:${item.securityId}` === key
-        ) : null;
+        const key =
+          packet.exchangeSegment && packet.securityId
+            ? `${packet.exchangeSegment}:${packet.securityId}`
+            : null;
+        const instrument = key
+          ? [...this.desired.values()].find(
+              (item) => `${item.exchangeSegment}:${item.securityId}` === key,
+            )
+          : null;
 
-        if (packet.type === "tick" && instrument && Number.isFinite(packet.ltp) && packet.ltp > 0) {
+        if (
+          packet.type === "tick" &&
+          instrument &&
+          Number.isFinite(packet.ltp) &&
+          packet.ltp > 0
+        ) {
           const tick = {
             ...packet,
             symbol: instrument.symbol,
@@ -95,12 +132,22 @@ export class DhanFeed extends EventEmitter {
           };
           this.emit("tick", tick);
         } else if (packet.type === "prevClose" && instrument) {
-          this.emit("prevClose", { ...packet, symbol: instrument.symbol, receivedAt: Date.now() });
+          this.emit("prevClose", {
+            ...packet,
+            symbol: instrument.symbol,
+            receivedAt: Date.now(),
+          });
         } else if (packet.type === "oi" && instrument) {
-          this.emit("oi", { ...packet, symbol: instrument.symbol, receivedAt: Date.now() });
+          this.emit("oi", {
+            ...packet,
+            symbol: instrument.symbol,
+            receivedAt: Date.now(),
+          });
         }
       } catch (error) {
-        logger.error("[DHAN FEED] Packet decode failed", { error: error.message });
+        logger.error("[DHAN FEED] Packet decode failed", {
+          error: error.message,
+        });
       }
     });
 
@@ -134,9 +181,12 @@ export class DhanFeed extends EventEmitter {
     if (this.retryTimer || this.stopped) return;
     this.attempt += 1;
     const base = this.attempt >= 4 ? 60_000 : 2_000;
-    const delay = Math.min(base * (2 ** Math.min(this.attempt - 1, 5)), 120_000);
+    const delay = Math.min(base * 2 ** Math.min(this.attempt - 1, 5), 120_000);
     const jittered = Math.round(delay * (0.8 + Math.random() * 0.4));
-    logger.warn("[DHAN FEED] Reconnect scheduled", { attempt: this.attempt, delayMs: jittered });
+    logger.warn("[DHAN FEED] Reconnect scheduled", {
+      attempt: this.attempt,
+      delayMs: jittered,
+    });
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.connect();
@@ -145,22 +195,51 @@ export class DhanFeed extends EventEmitter {
   }
 
   subscribe(instrument, mode = "ticker") {
-    const validated = config.INSTRUMENTS_BY_SYMBOL.get(String(instrument).toUpperCase());
-    if (!validated) throw new Error("Unsupported instrument symbol.");
-    const normalizedMode = ["ticker", "quote", "full"].includes(mode) ? mode : "ticker";
-    const previous = this.desired.get(validated.symbol);
-    const next = { ...validated, mode: normalizedMode };
-    this.desired.set(validated.symbol, next);
-    // Avoid sending duplicate subscribe messages when another browser joins the same symbol.
-    if (this.ws?.readyState === WebSocket.OPEN &&
-        (!previous || previous.mode !== normalizedMode ||
-         previous.securityId !== next.securityId ||
-         previous.exchangeSegment !== next.exchangeSegment)) {
-      if (previous && previous.mode !== normalizedMode) {
-        this.sendBatch([previous], { ticker: 16, quote: 18, full: 22 }[previous.mode]);
-      }
-      this.sendSubscriptions([next]);
+    const validated = config.INSTRUMENTS_BY_SYMBOL.get(
+      String(instrument).toUpperCase(),
+    );
+
+    if (!validated) {
+      throw new Error("Unsupported instrument symbol.");
     }
+
+    const normalizedMode = ["ticker", "quote", "full"].includes(mode)
+      ? mode
+      : "ticker";
+
+    const previous = this.desired.get(validated.symbol);
+
+    const next = {
+      ...validated,
+      mode: normalizedMode,
+    };
+
+    this.desired.set(validated.symbol, next);
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      if (previous && previous.mode !== normalizedMode) {
+        this.sendBatch(
+          [previous],
+          { ticker: 16, quote: 18, full: 22 }[previous.mode],
+        );
+      }
+
+      if (
+        !previous ||
+        previous.mode !== normalizedMode ||
+        previous.securityId !== next.securityId ||
+        previous.exchangeSegment !== next.exchangeSegment
+      ) {
+        this.sendSubscriptions([next]);
+      }
+    } else if (!this.stopped) {
+      logger.info("[DHAN FEED] Subscription queued; connecting", {
+        symbol: validated.symbol,
+      });
+
+      this.connect();
+    }
+
     return validated;
   }
 
@@ -184,12 +263,14 @@ export class DhanFeed extends EventEmitter {
     for (const [mode, list] of byMode) {
       const requestCode = { ticker: 15, quote: 17, full: 21 }[mode];
       // Dhan permits up to 100 instruments per subscription message.
-      for (let i = 0; i < list.length; i += 100) this.sendBatch(list.slice(i, i + 100), requestCode);
+      for (let i = 0; i < list.length; i += 100)
+        this.sendBatch(list.slice(i, i + 100), requestCode);
     }
   }
 
   sendBatch(items, requestCode) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || items.length === 0) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || items.length === 0)
+      return;
     const payload = {
       RequestCode: requestCode,
       InstrumentCount: items.length,
@@ -199,7 +280,10 @@ export class DhanFeed extends EventEmitter {
       })),
     };
     this.ws.send(JSON.stringify(payload), (error) => {
-      if (error) logger.error("[DHAN FEED] Subscription send failed", { error: error.message });
+      if (error)
+        logger.error("[DHAN FEED] Subscription send failed", {
+          error: error.message,
+        });
     });
   }
 
@@ -217,7 +301,8 @@ export class DhanFeed extends EventEmitter {
     this.connecting = false;
     if (socket) {
       try {
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ RequestCode: 12 }));
+        if (socket.readyState === WebSocket.OPEN)
+          socket.send(JSON.stringify({ RequestCode: 12 }));
         socket.close();
       } catch {}
     }

@@ -17,18 +17,28 @@ createSocketServer(server, feed, candleStore);
 let shuttingDown = false;
 
 async function start() {
+  logger.info("[SERVER] Starting application");
+
   server.listen(config.PORT, () => {
-    logger.info("HTTP server listening", {
+    logger.info("[SERVER] HTTP server listening", {
       port: config.PORT,
       environment: config.NODE_ENV,
     });
 
-    // Start the feed only in the persistent server process.
-    Promise.resolve(feed.start()).catch((error) => {
-      logger.error("Dhan feed startup failed", {
-        message: error.message,
+    try {
+      logger.info("[SERVER] Initializing Dhan feed");
+
+      feed.start();
+
+      logger.info("[SERVER] Dhan feed initialization completed", {
+        status: feed.status(),
       });
-    });
+    } catch (error) {
+      logger.error("[SERVER] Dhan feed initialization failed", {
+        message: error.message,
+        stack: error.stack,
+      });
+    }
   });
 }
 

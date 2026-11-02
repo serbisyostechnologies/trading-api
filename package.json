@@ -5,9 +5,9 @@
   "description": "SerbisyosTickStream api layer",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/dhan/DhanFeed.js && node --check src/market/CandleStore.js"
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "check": "node --check server.js && node --check dhan/DhanFeed.js && node --check market/CandleStore.js"
   },
   "keywords": [],
   "dependencies": {

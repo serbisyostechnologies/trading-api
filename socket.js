@@ -58,19 +58,22 @@ export function createSocketServer(httpServer, feed, candleStore) {
   });
 
   io.on("connection", (socket) => {
-    logger.info("Socket client connected", {
+    logger.info("[SOCKET] Client connected", {
       socketId: socket.id,
+      feedStatus: feed.status(),
     });
 
     socket.emit("market:status", feed.status());
 
-    // Subscribe to market data
     socket.on("market:subscribe", (payload = {}, ack = () => {}) => {
+      logger.info("[SOCKET] Subscription received", {
+        socketId: socket.id,
+        payload,
+      });
+
       try {
         const symbol = String(payload.symbol || "").toUpperCase();
         const mode = payload.mode || "ticker";
-
-        // Selected candle interval from React
         const intervalId = String(payload.interval || "1m");
 
         const selectedInterval = TIME_INTERVALS.find(
@@ -85,16 +88,11 @@ export function createSocketServer(httpServer, feed, candleStore) {
           throw new Error(`Invalid time interval: ${intervalId}`);
         }
 
-        // Subscribe to Dhan instrument (interval-independent)
         const instrument = feed.subscribe(symbol, mode);
 
-        // Join tick room
         socket.join(`market:${instrument.symbol}`);
-
-        // Join selected candle interval room
         socket.join(`market:${instrument.symbol}:candles:${intervalId}`);
 
-        // Retrieve candles for selected interval
         const candles = candleStore.getCandles(
           instrument.symbol,
           500,
@@ -114,17 +112,13 @@ export function createSocketServer(httpServer, feed, candleStore) {
           lastTick,
         });
 
-        logger.info("Market subscription requested", {
-          socketId: socket.id,
+        logger.info("[SOCKET] Subscription successful", {
           symbol: instrument.symbol,
-          mode,
-          interval: intervalId,
-          intervalSeconds: selectedInterval.seconds,
+          feedStatus: feed.status(),
         });
       } catch (error) {
-        logger.error("Market subscription failed", {
-          socketId: socket.id,
-          error: error.message,
+        logger.error("[SOCKET] Subscription failed", {
+          message: error.message,
         });
 
         ack({
@@ -134,24 +128,8 @@ export function createSocketServer(httpServer, feed, candleStore) {
       }
     });
 
-    // Unsubscribe
-    socket.on("market:unsubscribe", (payload = {}, ack = () => {}) => {
-      const symbol = String(payload.symbol || "").toUpperCase();
-      const intervalId = String(payload.interval || "1m");
-
-      socket.leave(`market:${symbol}`);
-
-      socket.leave(`market:${symbol}:candles:${intervalId}`);
-
-      ack({
-        ok: true,
-        symbol,
-        interval: intervalId,
-      });
-    });
-
     socket.on("disconnect", (reason) => {
-      logger.info("Socket client disconnected", {
+      logger.info("[SOCKET] Client disconnected", {
         socketId: socket.id,
         reason,
       });
