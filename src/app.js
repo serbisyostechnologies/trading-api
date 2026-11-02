@@ -15,7 +15,7 @@ export function createApp({ feed = null, candleStore = null } = {}) {
       origin(origin, callback) {
         const normalize = (value) => value.trim().replace(/\/+$/, "");
 
-        const allowedOrigins = config.frontendOrigins.map(normalize);
+        const allowedOrigins = config.FRONTEND_ORIGINS.map(normalize);
         const requestOrigin = origin ? normalize(origin) : null;
 
         if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
@@ -60,7 +60,7 @@ export function createApp({ feed = null, candleStore = null } = {}) {
   app.get("/api/instruments", (_req, res) => {
     res.json({
       success: true,
-      data: config.instruments.map(
+      data: config.DHAN_INSTRUMENTS_JSON.map(
         ({ symbol, exchangeSegment, securityId, label }) => ({
           symbol,
           exchangeSegment,
@@ -74,7 +74,7 @@ export function createApp({ feed = null, candleStore = null } = {}) {
   app.get("/api/market/:symbol/candles", (req, res) => {
     const symbol = String(req.params.symbol).toUpperCase();
 
-    if (!config.instrumentBySymbol.has(symbol)) {
+    if (!config.INSTRUMENTS_BY_SYMBOL.has(symbol)) {
       return res.status(404).json({
         success: false,
         message: "Unknown symbol",

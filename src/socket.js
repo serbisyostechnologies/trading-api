@@ -10,7 +10,7 @@ export function createSocketServer(httpServer, feed, candleStore) {
       origin(origin, callback) {
         const normalize = (value) => value.trim().replace(/\/+$/, "");
 
-        const allowedOrigins = config.frontendOrigins.map(normalize);
+        const allowedOrigins = config.FRONTEND_ORIGINS.map(normalize);
         const requestOrigin = origin ? normalize(origin) : null;
 
         if (!origin || allowedOrigins.includes(requestOrigin)) {
@@ -35,7 +35,7 @@ export function createSocketServer(httpServer, feed, candleStore) {
 
   // Authentication
   io.use((socket, next) => {
-    if (!config.authRequired) return next();
+    if (!config.AUTH_REQUIRED) return next();
 
     const token = socket.handshake.auth?.token;
 

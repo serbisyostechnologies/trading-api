@@ -145,7 +145,7 @@ export class DhanFeed extends EventEmitter {
   }
 
   subscribe(instrument, mode = "ticker") {
-    const validated = config.instrumentBySymbol.get(String(instrument).toUpperCase());
+    const validated = config.INSTRUMENTS_BY_SYMBOL.get(String(instrument).toUpperCase());
     if (!validated) throw new Error("Unsupported instrument symbol.");
     const normalizedMode = ["ticker", "quote", "full"].includes(mode) ? mode : "ticker";
     const previous = this.desired.get(validated.symbol);
